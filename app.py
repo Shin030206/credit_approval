@@ -1,3 +1,4 @@
+import urllib.parse
 import matplotlib.pyplot as plt
 import pandas as pd
 import pymysql
