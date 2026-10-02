@@ -18,9 +18,9 @@ st.title("💳 Hệ Thống Dự Đoán Xét Duyệt Thẻ Tín Dụng")
 @st.cache_resource
 def get_model():
   DB_USER = "avnadmin"
-  DB_PASS = urllib.parse.quote_plus("MẬT_KHẨU_AIVEN_CỦA_BẠN")
-  DB_HOST = "mysql-xxxxx.a.aivencloud.com"
-  DB_PORT = "12345"  # Xem đúng cổng trên Aiven
+  DB_PASS = urllib.parse.quote_plus("AVNS_vXMqtHh9OnEtJYzTI_b")
+  DB_HOST = "mysql-1670de5d-khanhnguyenngoc82-a7fc.d.aivencloud.com"
+  DB_PORT = "11821"  # Xem đúng cổng trên Aiven
   DB_NAME = "defaultdb"
 
   uri = f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
