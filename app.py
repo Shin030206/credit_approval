@@ -20,11 +20,11 @@ st.title("💳 Hệ Thống Phân Tích & Dự Đoán Xét Duyệt Thẻ Tín D�
 # 1. Kết nối DB và Load dữ liệu (Được cache để chạy cực nhanh)
 @st.cache_resource
 def load_data_and_model():
-  DB_USER = "avnadmin"
-  DB_PASS = urllib.parse.quote_plus("AVNS_vXMqtHh9OnEtJYzTI_b")
-  DB_HOST = "mysql-1670de5d-khanhnguyenngoc82-a7fc.d.aivencloud.com"
-  DB_PORT = "11821"  # Xem đúng cổng trên Aiven
-  DB_NAME = "defaultdb"
+  db_user = "avnadmin"
+  db_pass = urllib.parse.quote_plus("AVNS_vXMqtHh9OnEtJYzTI_b")
+  db_host = "mysql-1670de5d-khanhnguyenngoc82-a7fc.d.aivencloud.com"
+  db_port = "11821"  # Xem đúng cổng trên Aiven
+  db_name = "defaultdb"
 
   def connect_db():
     return pymysql.connect(
