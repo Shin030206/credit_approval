@@ -1,43 +1,76 @@
-import joblib
-import numpy as np
+import urllib.parse
 import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sqlalchemy import create_engine
 import streamlit as st
 
-# Thiết lập giao diện trang web
 st.set_page_config(
-    page_title="Credit Approval System", page_icon="💳", layout="centered"
+    page_title="Credit Approval Predictor", page_icon="💳", layout="centered"
 )
-
 st.title("💳 Hệ Thống Dự Đoán Xét Duyệt Thẻ Tín Dụng")
-st.markdown(
-    "Ứng dụng học máy dự đoán khả năng duyệt hồ sơ tín dụng dựa trên mô hình Random Forest."
-)
 
 
-# Load mô hình
+# Huấn luyện mô hình trực tiếp từ MySQL (chỉ chạy 1 lần duy nhất khi mở app nhờ cache)
 @st.cache_resource
-def load_model():
-  return joblib.load("credit_model.pkl")
+def get_model():
+  DB_USER = "avnadmin"
+  DB_PASS = urllib.parse.quote_plus("MẬT_KHẨU_AIVEN_CỦA_BẠN")
+  DB_HOST = "mysql-xxxxx.a.aivencloud.com"
+  DB_PORT = "12345"  # Xem đúng cổng trên Aiven
+  DB_NAME = "defaultdb"
+
+  uri = f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+  engine = create_engine(uri)
+
+  data = pd.read_sql("SELECT * FROM credit_approval;", con=engine)
+  data = data.drop(columns=["id"], errors="ignore")
+
+  X = data.drop(columns=["approval_status"])
+  y = data["approval_status"].map({"+": 1, "-": 0})
+
+  num_cols = ["A2", "A3", "A8", "A11", "A14", "A15"]
+  cat_cols = [c for c in X.columns if c not in num_cols]
+
+  num_pipe = Pipeline([
+      ("imputer", SimpleImputer(strategy="median")),
+      ("scaler", StandardScaler()),
+  ])
+  cat_pipe = Pipeline([
+      ("imputer", SimpleImputer(strategy="most_frequent")),
+      ("ohe", OneHotEncoder(handle_unknown="ignore")),
+  ])
+
+  prep = ColumnTransformer([("num", num_pipe, num_cols), ("cat", cat_pipe, cat_cols)])
+  clf = Pipeline([
+      ("prep", prep),
+      ("model", RandomForestClassifier(n_estimators=100, random_state=42)),
+  ])
+
+  clf.fit(X, y)
+  return clf
 
 
-model = load_model()
+with st.spinner("Đang kết nối database và khởi tạo mô hình..."):
+  model = get_model()
 
-# Form nhập liệu
-with st.form("prediction_form"):
-  st.subheader("Thông tin ứng viên")
-
+# Giao diện Form nhập thông tin
+with st.form("credit_form"):
+  st.subheader("Thông tin hồ sơ khách hàng")
   col1, col2 = st.columns(2)
+
   with col1:
-    a1 = st.selectbox("Giới tính / Nhóm A1", options=["a", "b"])
-    a2 = st.number_input(
-        "Tuổi (A2)", min_value=18.0, max_value=85.0, value=30.0, step=1.0
-    )
-    a3 = st.number_input("Nợ hiện tại (A3)", min_value=0.0, value=2.5, step=0.1)
-    a4 = st.selectbox("Tình trạng gia đình (A4)", options=["u", "y", "l", "t"])
-    a5 = st.selectbox("Khách hàng (A5)", options=["g", "p", "gg"])
+    a1 = st.selectbox("A1 (Giới tính / Nhóm)", ["a", "b"])
+    a2 = st.number_input("A2 (Tuổi)", min_value=15.0, max_value=90.0, value=30.0)
+    a3 = st.number_input("A3 (Nợ hiện tại)", min_value=0.0, value=2.5)
+    a4 = st.selectbox("A4 (Tình trạng hôn nhân)", ["u", "y", "l", "t"])
+    a5 = st.selectbox("A5 (Loại khách hàng)", ["g", "p", "gg"])
     a6 = st.selectbox(
-        "Ngành nghề (A6)",
-        options=[
+        "A6 (Ngành nghề)",
+        [
             "c",
             "d",
             "cc",
@@ -55,37 +88,28 @@ with st.form("prediction_form"):
         ],
     )
     a7 = st.selectbox(
-        "Dân tộc / Nhóm (A7)",
-        options=["v", "h", "bb", "j", "n", "z", "dd", "ff", "o"],
+        "A7 (Dân tộc / Nhóm)",
+        ["v", "h", "bb", "j", "n", "z", "dd", "ff", "o"],
     )
 
   with col2:
-    a8 = st.number_input(
-        "Năm kinh nghiệm (A8)", min_value=0.0, value=1.5, step=0.1
-    )
+    a8 = st.number_input("A8 (Số năm kinh nghiệm)", min_value=0.0, value=1.5)
     a9 = st.selectbox(
-        "Lịch sử nợ xấu (A9)",
-        options=["t", "f"],
-        help="t: Có vi phạm/nợ xấu, f: Không",
+        "A9 (Lịch sử nợ xấu)", ["t", "f"], help="t: Có nợ xấu, f: Không"
     )
-    a10 = st.selectbox("Việc làm hiện tại (A10)", options=["t", "f"])
+    a10 = st.selectbox("A10 (Tình trạng việc làm)", ["t", "f"])
     a11 = st.number_input(
-        "Điểm tín dụng (A11)", min_value=0, max_value=70, value=2, step=1
+        "A11 (Điểm tín dụng)", min_value=0, max_value=70, value=2
     )
-    a12 = st.selectbox("Giấy phép lái xe (A12)", options=["t", "f"])
-    a13 = st.selectbox("Tình trạng cư trú (A13)", options=["g", "p", "s"])
-    a14 = st.number_input(
-        "Mã bưu chính / Tài khoản (A14)", min_value=0.0, value=100.0, step=10.0
-    )
-    a15 = st.number_input(
-        "Thu nhập (A15)", min_value=0, value=500, step=100
-    )  # Thu nhập
+    a12 = st.selectbox("A12 (Giấy phép lái xe)", ["t", "f"])
+    a13 = st.selectbox("A13 (Tình trạng cư trú)", ["g", "p", "s"])
+    a14 = st.number_input("A14 (Mã bưu chính)", min_value=0.0, value=100.0)
+    a15 = st.number_input("A15 (Thu nhập)", min_value=0, value=500)
 
-  submit_btn = st.form_submit_button("🔍 Tiến hành Xét Duyệt")
+  submit = st.form_submit_button("🔍 Tiến hành Xét Duyệt")
 
-if submit_btn:
-  # Gom dữ liệu thành DataFrame
-  input_data = pd.DataFrame(
+if submit:
+  input_df = pd.DataFrame(
       [[
           a1,
           a2,
@@ -105,17 +129,13 @@ if submit_btn:
       ]],
       columns=[f"A{i}" for i in range(1, 16)],
   )
-
-  # Dự đoán
-  prediction = model.predict(input_data)[0]
-  probability = model.predict_proba(input_data)[0][1]
+  pred = model.predict(input_df)[0]
+  prob = model.predict_proba(input_df)[0][1]
 
   st.divider()
-  if prediction == 1:
-    st.success(
-        f"✅ **KẾT QUẢ: ĐƯỢC DUYỆT CẤP THẺ** (Độ tin cậy: {probability*100:.1f}%)"
-    )
+  if pred == 1:
+    st.success(f"✅ **KẾT QUẢ: ĐƯỢC DUYỆT CẤP THẺ** (Xác suất: {prob*100:.1f}%)")
   else:
     st.error(
-        f"❌ **KẾT QUẢ: TỪ CHỐI DUYỆT** (Độ tin cậy: {(1-probability)*100:.1f}%)"
+        f"❌ **KẾT QUẢ: TỪ CHỐI DUYỆT** (Xác suất duyệt: {prob*100:.1f}%)"
     )
